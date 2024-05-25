@@ -1,29 +1,20 @@
-import socket
+class Client:
+    def __init__(self, addr, client_socket):
+        self.addr = addr
+        self.client_socket = client_socket
+        self.name = None
+        self.password = None
 
-def run_client():
-    client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def set_name(self, name):
+        self.name = name
+    def __repr__(self):
+        return f"Client({self.name}, {self.addr})"
 
-    hermes_server_ip = "127.0.0.1"
-    gate = 9090
 
-    client.connect((hermes_server_ip, gate))
+class user:
+    """Responsible for peer to peer communication"""
 
-    try:
-        while True:
-            msg = input("Enter your message: ")
-            client.send(msg.encode("utf-8")[:1024])
+    def __init__(self, name):
+        self.name = name
 
-            response = client.recv(1024)
-            response = response.decode("utf-8")
-
-            if response.lower() == "closed":
-                break
-
-            print(f"Received: {response}")
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        client.close()
-        print(f"Connection to hermes lost")
-
-run_client()
+    

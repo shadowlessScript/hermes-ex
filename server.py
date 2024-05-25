@@ -1,63 +1,78 @@
 # importing the socket library
-import socket
-import threading
+from socket import socket, AF_INET, SOCK_STREAM
+from threading import Thread
+import time
+from client import Client
+
+HOST = "127.0.0.1"
+GATE = 9090
+BUFSIZ = 1024 # MAX SIZE OF MESSAGES
+ADDR = (HOST, GATE)
+
+HERMES_SERVER = socket(AF_INET, SOCK_STREAM)
+try:
+    HERMES_SERVER.bind(ADDR)
+except Exception as e:
+    HERMES_SERVER.close()
 
 
-def handle_client(client_socket, client_addr):
-    try:
-        while True:
-            request = client_socket.recv(1024)
-            request = request.decode("utf-8")
+clients = []
 
-            if request.lower() == "close":
-                client_socket.send("closed".encode("utf-8"))
+
+def broadcast(msg, name=""):
+    for client in clients:
+        client = client.client_socket
+        client.send(bytes(name, "utf8") + msg)
+
+
+def client_communication(hermes_client):
+    client = hermes_client.client_socket
+    name = client.recv(BUFSIZ).decode("utf-8")
+    hermes_client.set_name(name)
+    msg = f"{name} has joined the chat!"
+    broadcast(bytes(msg, "utf8"))
+    while True:
+        try:
+            msg = client.recv(BUFSIZ)
+
+            print(f"{name}: ", msg.decode("utf8"))
+            if msg == bytes("!leave", "utf8"):
+                broadcast(f"{name} has left the chat....".encode("utf8"), "")
+                client.close()
+                clients.remove(hermes_client)
+
                 break
-
-            print(f"received: {request}")
-
-            response = "accepted".encode("utf-8")
-            client_socket.send(response)
-
-    except Exception as e:
-        print(f"Error when handling client: {e}")
-    finally:
-        client_socket.close()
-        print(f"Connection to client ({client_addr[0]}:{client_addr[1]}) closed")
-
-def deploy_hermes():
-    """
-    this will start the tcp server, by calling the socket object
-    :return:
-    """
-
-     # giving the server an ip and port
-    hermes_server_ip = "127.0.0.1"
-    gate = 9090
-    try:
-        # create a socket object
-        hermes_server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # socket.AF_INET -> SHOWS THE TYPE OF IP ADDRESS IN THIS CASE IT'S IPV4,
-        # socket.SOCK_STREAM -> tells hermes to use tcp.
-
-        # makes hermes listen through this ip and gate, using the bind method
-        hermes_server.bind((hermes_server_ip, gate))
-
-        # now make hermes listen for clients
-        hermes_server.listen() # the argument in the listen method signifies the number of clients it should accept, in this case only one.
-        print(f"Hermes is waiting for clients at {hermes_server_ip}:{gate}....")
-
-        while True:
-            # accepting incoming connections
-            client_socket, client_addr = hermes_server.accept()
-            print(f"Hermes accepted connection between, {client_addr[0]}:{client_addr[1]}")
-            thread = threading.Thread(target=handle_client, args=(client_socket, client_addr))
-            thread.start()
-            client_socket.send(f"{client_addr[1]} has joined the chat :)".encode("utf-8"))
+            else:
+                broadcast(msg, name+":")
+        except Exception as e:
+            print(f"Error: {e}")
+            break
 
 
-    except Exception as e:
-        print(f"error: {e}")
-    finally:
-        hermes_server.close()
+def wait_for_connection():
+    run = True
 
-deploy_hermes()
+    while run:
+        try:
+            client_socket, client_addr = HERMES_SERVER.accept()
+            hermes_client = Client(
+                client_addr, client_socket)
+            clients.append(hermes_client)
+            print(f"Hermes accepted request from {client_addr} at {time.time()}")
+
+            Thread(target=client_communication, args=(hermes_client,)).start()
+
+        except Exception as e:
+            print(f"error: {e}")
+            HERMES_SERVER.close()
+
+    HERMES_SERVER.close()
+
+
+if __name__ == "__main__":
+    HERMES_SERVER.listen(10)
+    print("Hermes waiting for requests...")
+    ACCEPT_THREAD = Thread(target=wait_for_connection)
+    ACCEPT_THREAD.start()
+    ACCEPT_THREAD.join()
+    HERMES_SERVER.close()
